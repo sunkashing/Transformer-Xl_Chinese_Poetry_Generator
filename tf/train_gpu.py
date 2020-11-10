@@ -21,7 +21,6 @@ from gpu_utils import assign_to_gpu, average_grads_and_vars
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
-from postprocess import top_one_result, gen_on_keyword, gen_diversity
 
 # GPU config
 flags.DEFINE_integer("num_hosts", default=1,
@@ -199,11 +198,6 @@ def get_model_fn(n_token, cutoffs):
         num_params = sum([np.prod(v.shape) for v in tf.trainable_variables()])
         tf.logging.info('#params: {}'.format(num_params))
 
-        # format_str = '{{:<{0}s}}\t{{}}'.format(
-        #     max([len(v.name) for v in tf.trainable_variables()]))
-        # for v in tf.trainable_variables():
-        #   tf.logging.info(format_str.format(v.name, v.get_shape()))
-
         if is_training:
             all_vars = tf.trainable_variables()
             grads = tf.gradients(loss, all_vars)
@@ -229,6 +223,78 @@ def single_core_graph(n_token, cutoffs, is_training, inp, tgt, mems):
 
     return model_ret
 
+
+def single_core_graph_for_inference(n_token, cutoffs, is_training, inp,  mems, mems_id):
+    model_fn = get_model_fn_for_inference(
+        n_token=n_token,
+        cutoffs=cutoffs)
+
+    model_ret = model_fn(
+        inp=inp,
+        mems=mems,
+        mems_id=mems_id,
+        is_training=is_training)
+
+    return model_ret
+
+
+def get_model_fn_for_inference(n_token, cutoffs):
+    def model_fn(inp, mems, mems_id, is_training):
+        inp = tf.transpose(inp, [1, 0])
+
+        if FLAGS.init == "uniform":
+            initializer = tf.initializers.random_uniform(
+                minval=-FLAGS.init_range,
+                maxval=FLAGS.init_range,
+                seed=None)
+        elif FLAGS.init == "normal":
+            initializer = tf.initializers.random_normal(
+                stddev=FLAGS.init_std,
+                seed=None)
+            proj_initializer = tf.initializers.random_normal(
+                stddev=FLAGS.proj_init_std,
+                seed=None)
+
+        tie_projs = [False for _ in range(len(cutoffs) + 1)]
+        if FLAGS.proj_share_all_but_first:
+            for i in range(1, len(tie_projs)):
+                tie_projs[i] = True
+        new_mems, output, new_mems_id, attn_prob = model.transformer_inference(
+            dec_inp=inp,
+            mems=mems,
+            mems_id=mems_id,
+            n_token=n_token,
+            n_layer=FLAGS.n_layer,
+            d_model=FLAGS.d_model,
+            d_embed=FLAGS.d_embed,
+            n_head=FLAGS.n_head,
+            d_head=FLAGS.d_head,
+            d_inner=FLAGS.d_inner,
+            dropout=FLAGS.dropout,
+            dropatt=FLAGS.dropatt,
+            initializer=initializer,
+            proj_initializer=proj_initializer,
+            is_training=is_training,
+            mem_len=FLAGS.mem_len,
+            cutoffs=cutoffs,
+            div_val=FLAGS.div_val,
+            tie_projs=tie_projs,
+            input_perms=None,
+            target_perms=None,
+            head_target=None,
+            same_length=FLAGS.same_length,
+            clamp_len=FLAGS.clamp_len,
+            use_tpu=False,
+            untie_r=FLAGS.untie_r,
+            proj_same_dim=FLAGS.proj_same_dim)
+
+        # number of parameters
+        num_params = sum([np.prod(v.shape) for v in tf.trainable_variables()])
+        tf.logging.info('#params: {}'.format(num_params))
+
+        return new_mems, output, new_mems_id, attn_prob
+
+    return model_fn
 
 def train(n_token, cutoffs, ps_device):
     # os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'
@@ -478,6 +544,124 @@ def evaluate(n_token, cutoffs, ps_device):
             avg_loss, math.exp(avg_loss), avg_loss / math.log(2)))
 
 
+# Add inference.
+def inference(n_token, cutoffs, ps_device):
+    cur_Vocab = Vocab()
+    cur_Vocab.count_file('../data/train.txt', add_eos=False)
+    cur_Vocab.build_vocab()
+    output_name = 'result'
+
+    test_list = tf.placeholder(tf.int64, shape=[1, None])
+    dataset = tf.data.Dataset.from_tensors(test_list)
+    iterator = dataset.make_initializable_iterator()
+    input_feed = iterator.get_next()
+    inputs = tf.split(input_feed, FLAGS.num_core_per_host, 0)
+
+    per_core_bsz = 1
+    tower_mems, tower_losses, tower_new_mems = [], [], []
+    tower_output = []
+    tower_mems_id = []
+    tower_new_mems_id = []
+    tower_attn_prob = []
+
+    for i in range(FLAGS.num_core_per_host):
+        with tf.device(assign_to_gpu(i, ps_device)), \
+             tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+            mems_i = [tf.placeholder(tf.float32,
+                                     [FLAGS.mem_len, per_core_bsz, FLAGS.d_model])
+                      for _ in range(FLAGS.n_layer)]
+
+            mems_i_id = [tf.placeholder(tf.int64,
+                                     [FLAGS.mem_len, per_core_bsz])
+                      for _ in range(FLAGS.n_layer)]
+
+            new_mems_i, output_i, new_mems_i_id, attn_prob_i = single_core_graph_for_inference(
+                n_token=n_token,
+                cutoffs=cutoffs,
+                is_training=False,
+                inp=inputs[i],
+                mems=mems_i,
+                mems_id=mems_i_id)
+
+            tower_mems.append(mems_i)
+            tower_new_mems.append(new_mems_i)
+            tower_output.append(output_i)
+            tower_mems_id.append(mems_i_id)
+            tower_new_mems_id.append(new_mems_i_id)
+            tower_attn_prob.append(attn_prob_i)
+
+    tower_mems_np = [
+        [np.zeros([FLAGS.mem_len, per_core_bsz, FLAGS.d_model], dtype=np.float32)
+         for layer in range(FLAGS.n_layer)]
+        for core in range(FLAGS.num_core_per_host)
+    ]
+
+    tower_mems_id_np = [
+        [np.zeros([FLAGS.mem_len, per_core_bsz], dtype=np.float32)
+         for layer in range(FLAGS.n_layer)]
+        for core in range(FLAGS.num_core_per_host)
+    ]
+
+    saver = tf.train.Saver()
+
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+        sess.run(tf.global_variables_initializer())
+
+        if FLAGS.eval_ckpt_path is None:
+            eval_ckpt_path = tf.train.latest_checkpoint(FLAGS.model_dir)
+        else:
+            eval_ckpt_path = FLAGS.eval_ckpt_path
+        # load model.
+        saver.restore(sess, eval_ckpt_path)
+        fetches = [tower_new_mems,
+                   tower_output,
+                   tower_new_mems_id,
+                   tower_attn_prob,
+                   'transformer/adaptive_embed/lookup_table:0']
+    # Get inference output
+    while True:
+        input_text = input("seed text >>> ")
+        while not input_text:
+            print('Prompt should not be empty!')
+            input_text = input("Model prompt >>> ")
+        encoded_input = cur_Vocab.encode_sents(input_text, ordered=True)
+
+        with open('{}.txt'.format(output_name), 'a') as f:
+            f.write('=' * 100 + '\n')
+            f.write('input:\n')
+            f.write(input_text + '\n')
+
+        output_len = 100
+        progress = ProgressBar()
+        for _ in progress(range(output_len)):
+            time.sleep(0.01)
+            feed_dict = {}
+            for i in range(FLAGS.num_core_per_host):
+                for m, m_np in zip(tower_mems[i], tower_mems_np[i]):
+                    feed_dict[m] = m_np
+
+                for id, id_np in zip(tower_mems_id[i], tower_mems_id_np[i]):
+                    feed_dict[id] = id_np
+
+            sess.run(iterator.initializer, feed_dict={test_list: [encoded_input]})
+            fetched = sess.run(fetches, feed_dict=feed_dict)
+            tower_mems_np, output = fetched[:2]
+            tower_mems_id_np = fetched[2]
+            tmp_list = output[0][-1][0]
+            tmp_list = tmp_list.tolist()
+            index = sorted(range(len(tmp_list)), key=lambda k: tmp_list[k], reverse=True)[:1][0]
+
+            input_text += cur_Vocab.get_sym(index) if cur_Vocab.get_sym(index) != '<eos>' else '\n'
+            encoded_input = [index]
+
+        # print(input_text)
+
+        with open('{}.txt'.format(output_name), 'a') as f:
+            f.write('output:\n')
+            f.write(input_text + '\n')
+            f.write('=' * 100 + '\n')
+
+
 def main(unused_argv):
     del unused_argv  # Unused
 
@@ -493,8 +677,7 @@ def main(unused_argv):
         train(n_token, cutoffs, "/gpu:0")
     if FLAGS.do_eval:
         evaluate(n_token, cutoffs, "/gpu:0")
-
-
+        
 
 if __name__ == "__main__":
     tf.app.run()

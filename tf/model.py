@@ -490,7 +490,6 @@ def transformer(dec_inp, target, mems, n_token, n_layer, d_model, d_embed,
             perms=input_perms,
             proj_same_dim=proj_same_dim)
 
-        # todo 这个mask 有什么用?????????
         attn_mask = _create_mask(qlen, mlen, same_length)
 
         pos_seq = tf.range(klen - 1, -1, -1.0)
@@ -741,3 +740,5 @@ def rel_multihead_attn_for_inference(w, r, r_w_bias, r_r_bias, attn_mask, mems, 
 
         output = tf.contrib.layers.layer_norm(attn_out + w, begin_norm_axis=-1)
     return output, attn_prob
+
+

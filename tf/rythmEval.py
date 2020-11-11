@@ -10,16 +10,12 @@ def load_rhythm_list():
     rhythm_dict = dict()
     for rhythm_line in rhythm_lines:
         rhythm_name = re.search(".*(?=[平上去入]声:)", rhythm_line).group() 
-        # print(rhythm_name) 
         rhythm_tune = re.search("[平上去入](?=声:)", rhythm_line).group() 
-        # print(rhythm_tune)  
         rhythm_characters = re.sub(".*[平上去入]声:", "", rhythm_line)  
-        # print(rhythm_characters) 
         for character in rhythm_characters:
             if character not in rhythm_dict:
                 rhythm_dict[character] = list()
             rhythm_dict[character].append([rhythm_name, rhythm_tune])
-    # print(rhythm_dict)
     return rhythm_dict
 
 
@@ -33,15 +29,11 @@ def get_rhythm(character):
         for rhythm_item in RHYTHM_LIST.get(character):
             rhythm_set.add(rhythm_item[0])
         if len(rhythm_set) == 1:
-            print("rhythm_set") 
-            print(rhythm_set)
             return list(rhythm_set)[0]
         else:
-            print(rhythm_set)
             return "/".join(list(rhythm_set))
     else:
-        print(rhythm_set)
-        return "Special Char"
+            return "Special Char"
 
 
 def get_tone(character):
@@ -53,9 +45,7 @@ def get_tone(character):
     """
     tone_set = set()
     if character in RHYTHM_LIST:
-        # print(character)
         for rhythm_item in RHYTHM_LIST.get(character):
-            # print(rhythm_item)
             tone_set.add(re.sub("[上去入]", "Z", rhythm_item[1]))
         if len(tone_set) == 1:  # 若当前字不是多音字或是平仄相同的多音字
             if (list(tone_set)[0] == "平"):
@@ -153,7 +143,6 @@ def inspect_sticky(last_second_type, this_first_type):
 def poem_analyse(title, author, content):
     sentences = [sentence for sentence in re.split("[，。？！]", content) if sentence != ""]
     punctuations = re.findall("[，。？！]", content)
-    print(sentences)
     # check if the poem follow number of characters.
     if len(sentences) != 4 and len(sentences) != 8:
         print("《" + title + "》", author, "诗句句数不是绝句或律诗")
@@ -169,8 +158,7 @@ def poem_analyse(title, author, content):
     for sentence in sentences:
         sentence_tone_list.append("".join([get_tone(character) for character in sentence]))
     
-    print("sentence_tone_list")
-    print(sentence_tone_list)
+
     # 判断是否押P声韵
     if not all([sentence_tone_list[i][-1] in ["P", "*"] for i in range(len(sentences)) if i % 2 == 1]):
         print("《" + title + "》", author, "诗文没有押韵或押仄声韵")
@@ -185,15 +173,29 @@ def poem_analyse(title, author, content):
     for i in range(int(len(sentences) / 2)):
         first_sentence = sentences[2 * i + 0]  # 出句内容
         second_sentence = sentences[2 * i + 1]  # 对句内容
-
+        print("**********************************")
+        print("first_sentence")
+        print(first_sentence)
+        print("second_sentence")
+        print(second_sentence)
         first_tone = sentence_tone_list[2 * i + 0]  # 出句的P仄
         second_tone = sentence_tone_list[2 * i + 1]  # 对句的P仄
-
+        print("tone")
+        print(first_tone)
+        print(second_tone)
         second_rhythm = "（" + get_rhythm(second_sentence[-1]) + "）"  # 对句的韵脚
-
+        print("second_rhythm")
+        print(second_rhythm)
         first_correct, first_type = inspect_sentence_tone(first_tone)
         second_correct, second_type = inspect_sentence_tone(second_tone)
-
+        print("first_correct")
+        print(first_correct)
+        print("second_correct")
+        print(second_correct)
+        print("first_type")
+        print(first_type)
+        print("second_type")
+        print(second_type)
         other_analysis = ""
         if first_correct and second_correct:
             if not inspect_corresponding(first_type, second_type):  # 判断是否对
@@ -205,10 +207,10 @@ def poem_analyse(title, author, content):
 
         output_sentence = first_sentence + punctuations[2 * i + 0] + second_sentence + punctuations[2 * i + 1]  # 第一行输出
         output_analysis = first_tone + "　" + second_tone + second_rhythm  # 第二行输出
-        # output_analysis += " —— " + other_analysis + first_explanation + " " + second_explanation
 
         print(output_sentence)
         print(output_analysis)
+        print("**********************************")
 
     return True
 

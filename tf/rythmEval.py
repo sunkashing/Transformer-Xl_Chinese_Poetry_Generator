@@ -145,12 +145,12 @@ def poem_analyse(title, author, content):
     punctuations = re.findall("[，。？！]", content)
     # check if the poem follow number of characters.
     if len(sentences) != 4 and len(sentences) != 8:
-        print("《" + title + "》", author, "诗句句数不是绝句或律诗")
+        print("《" + title + "》", author, "The poem does not follow number of lines.")
         return False
 
     # ehck if the sentense follows length constrain
     if not all([len(sentence) == 5 or len(sentence) == 7 for sentence in sentences]):
-        print("《" + title + "》", author, "诗文*句子的字数不是五言或七言")
+        print("《" + title + "》", author, "The poem does not follo number of chars.")
         return False
 
     # check the Ping Ze evalue.
@@ -161,7 +161,7 @@ def poem_analyse(title, author, content):
 
     # 判断是否押P声韵
     if not all([sentence_tone_list[i][-1] in ["P", "*"] for i in range(len(sentences)) if i % 2 == 1]):
-        print("《" + title + "》", author, "诗文没有押韵或押仄声韵")
+        print("《" + title + "》", author, "The poem does not follow tonal pattern")
         return False
 
     print("《" + title + "》", author)
@@ -216,11 +216,10 @@ def poem_analyse(title, author, content):
 
 
 if __name__ == "__main__":
-    # 载入整理完成的全唐诗文本语料
     with open("全唐诗.json", encoding="UTF-8") as file:
         poem_json = json.loads(file.read())
     for poem_item in poem_json["data"]:
 
         if poem_analyse(poem_item["title"], poem_item["author"], poem_item["content"].replace("\n", "")):
-            print("点击回车继续...")
+            print("press enter to continue...")
             input()

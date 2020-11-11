@@ -490,7 +490,7 @@ def transformer(dec_inp, target, mems, n_token, n_layer, d_model, d_embed,
             perms=input_perms,
             proj_same_dim=proj_same_dim)
 
-        # todo 这个mask 有什么用?????????
+
         attn_mask = _create_mask(qlen, mlen, same_length)
 
         pos_seq = tf.range(klen - 1, -1, -1.0)

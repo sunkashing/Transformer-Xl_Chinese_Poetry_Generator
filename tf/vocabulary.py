@@ -23,20 +23,19 @@ class Vocab(object):
         self.delimiter = delimiter
         self.vocab_file = vocab_file
         self.idx2sym = []
-        self.sym2idx = OrderedDict()           # todo  确定这里有没有问题
+        self.sym2idx = OrderedDict()
 
-        # for zhihu dataset
-        # todo delete here when test other datasets
+
         # self.min_freq = 100
-        self.add_symbol('<UNK>')
-        self.unk_idx = self.get_idx('<UNK>')
+        # self.add_symbol('<UNK>')
+        # self.unk_idx = self.get_idx('<UNK>')
 
     def tokenize(self, line, add_eos=False, add_double_eos=False):
         line = line.strip()
         symbols = list(line)
 
         if add_double_eos:  # lm1b
-            # 确保 在symbol list 中能找
+            # Make sure could find in symbol list.
             self.add_symbol('<S>')
             return ['<S>'] + symbols + ['<S>']
         elif add_eos:
@@ -60,7 +59,7 @@ class Vocab(object):
 
         return sents
 
-    # 更新counter 中的token
+    # Update token.
     def count_sents(self, sents, verbose=False):
         """
           sents : a list of sentences, each a list of tokenized symbols
@@ -81,7 +80,7 @@ class Vocab(object):
                 self.add_symbol(symb)
         self.unk_idx = self.sym2idx['<UNK>']
 
-    # 建立vocab, 将symbol 保存
+    # Build vocab, save symbol.
     def build_vocab(self):
         if self.vocab_file:
             print('building vocab from {}'.format(self.vocab_file))
@@ -93,10 +92,6 @@ class Vocab(object):
 
             self.add_special("<eos>")
 
-            # todo 这里巨坑!!!!!
-            # for sym, cnt in self.counter.most_common(self.max_size):
-            #     if cnt < self.min_freq:
-            #         break
             tmp = sorted(self.counter.items(), key=lambda item:item[0])
             for sym, cnt in tmp:
                 if cnt < self.min_freq:
@@ -106,7 +101,7 @@ class Vocab(object):
             print('final vocab size {} from {} unique tokens'.format(
                 len(self), len(self.counter)))
 
-    # 主要在于convert_to_nparray, 其实也就是将vocab变成idx
+    # Convert to index.
     def encode_file(self, path, ordered=False, verbose=False,
                     add_double_eos=False):
         if verbose: print('encoding file {} ...'.format(path))
@@ -166,12 +161,12 @@ class Vocab(object):
     def get_indices(self, symbols):
         return [self.get_idx(sym) for sym in symbols]
 
-    # 字转index
+    # Chr to Index.
     def convert_to_nparray(self, symbols):
         nparray = np.array(self.get_indices(symbols), dtype=np.int64)
         return nparray
 
-    # index转字
+    # Index to chr.
     def convert_to_sent(self, indices, exclude=None):
         if exclude is None:
             return ' '.join([self.get_sym(idx) for idx in indices])

@@ -171,42 +171,42 @@ def poem_analyse(title, author, content):
 
 
     for i in range(int(len(sentences) / 2)):
-        first_sentence = sentences[2 * i + 0]  # 出句内容
-        second_sentence = sentences[2 * i + 1]  # 对句内容
-        print("**********************************")
-        print("first_sentence")
-        print(first_sentence)
-        print("second_sentence")
-        print(second_sentence)
-        first_tone = sentence_tone_list[2 * i + 0]  # 出句的P仄
-        second_tone = sentence_tone_list[2 * i + 1]  # 对句的P仄
-        print("tone")
-        print(first_tone)
-        print(second_tone)
-        second_rhythm = "（" + get_rhythm(second_sentence[-1]) + "）"  # 对句的韵脚
-        print("second_rhythm")
-        print(second_rhythm)
+        first_sentence = sentences[2 * i + 0]  
+        second_sentence = sentences[2 * i + 1]  
+        # print("**********************************")
+        # print("first_sentence")
+        # print(first_sentence)
+        # print("second_sentence")
+        # print(second_sentence)
+        first_tone = sentence_tone_list[2 * i + 0]  
+        second_tone = sentence_tone_list[2 * i + 1]  
+        # print("tone")
+        # print(first_tone)
+        # print(second_tone)
+        second_rhythm = "（" + get_rhythm(second_sentence[-1]) + "）"  
+        # print("second_rhythm")
+        # print(second_rhythm)
         first_correct, first_type = inspect_sentence_tone(first_tone)
         second_correct, second_type = inspect_sentence_tone(second_tone)
-        print("first_correct")
-        print(first_correct)
-        print("second_correct")
-        print(second_correct)
-        print("first_type")
-        print(first_type)
-        print("second_type")
-        print(second_type)
+        # print("first_correct")
+        # print(first_correct)
+        # print("second_correct")
+        # print(second_correct)
+        # print("first_type")
+        # print(first_type)
+        # print("second_type")
+        # print(second_type)
         other_analysis = ""
         if first_correct and second_correct:
-            if not inspect_corresponding(first_type, second_type):  # 判断是否对
+            if not inspect_corresponding(first_type, second_type):  
                 other_analysis += "【失对】"
-            if last_second_type is not None and inspect_sticky(last_second_type, first_type):  # 判断是否黏
+            if last_second_type is not None and inspect_sticky(last_second_type, first_type):  
                 other_analysis += "【失黏】"
 
         last_second_type = second_type
 
-        output_sentence = first_sentence + punctuations[2 * i + 0] + second_sentence + punctuations[2 * i + 1]  # 第一行输出
-        output_analysis = first_tone + "　" + second_tone + second_rhythm  # 第二行输出
+        output_sentence = first_sentence + punctuations[2 * i + 0] + second_sentence + punctuations[2 * i + 1]  
+        output_analysis = first_tone + "　" + second_tone + second_rhythm  
 
         print(output_sentence)
         print(output_analysis)
@@ -216,7 +216,7 @@ def poem_analyse(title, author, content):
 
 
 if __name__ == "__main__":
-    with open("全唐诗.json", encoding="UTF-8") as file:
+    with open("test.json", encoding="UTF-8") as file:
         poem_json = json.loads(file.read())
     for poem_item in poem_json["data"]:
 
